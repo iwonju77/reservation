@@ -25,6 +25,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://reservation:reservation_test@127.0.0.1:5432/reservation_test
       APP_ENV: test
+      SESSION_SECRET: ci-only-session-secret-at-least-32-characters
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

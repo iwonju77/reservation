@@ -14,3 +14,8 @@ export function runtimeConfig(environment: NodeJS.ProcessEnv = process.env): Run
 export function databaseUrl(environment: NodeJS.ProcessEnv = process.env): string {
   return z.string().url().startsWith("postgresql://").parse(environment.DATABASE_URL);
 }
+
+export function sessionSecret(environment: NodeJS.ProcessEnv = process.env): Uint8Array {
+  const value = z.string().min(32).parse(environment.SESSION_SECRET);
+  return new TextEncoder().encode(value);
+}

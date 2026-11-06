@@ -9,3 +9,7 @@ body { margin: 0; }
 main { max-width: 48rem; margin: 12vh auto; padding: 2rem; }
 h1 { font-size: clamp(2rem, 7vw, 4rem); margin: 0.4rem 0 1rem; }
 .eyebrow { color: #9c3f28; font-weight: 700; letter-spacing: 0.08em; }
+.login-form { display: grid; gap: 0.75rem; max-width: 24rem; }
+.login-form input { border: 1px solid #b8aa98; border-radius: 0.4rem; padding: 0.75rem; font: inherit; }
+.login-form button { border: 0; border-radius: 0.4rem; padding: 0.8rem; background: #9c3f28; color: white; font: inherit; font-weight: 700; }
+.login-form button:disabled { opacity: 0.6; }

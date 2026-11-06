@@ -1,8 +1,8 @@
 # 구현 진행 상황
 
-최종 문서 작성일: 2026-11-06 (Asia/Taipei)
+최종 문서 작성일: 2026-11-07 (Asia/Taipei)
 
-현재 상태: Codex 직접 구현용 설계 v2 개정 완료. 앱 코드·의존성·DB·기능 테스트는 아직 구현하거나 실행하지 않았다. 기준 로컬 커밋은 `e19faea`, 브랜치는 `main`이다. 본 개정의 저장과 GitHub 반영은 별개다.
+현재 상태: Step 00~03 구현과 검증 완료. 브랜치는 `main`이며 PostgreSQL migration 4개가 적용돼 있다.
 
 ## 단계 추적
 
@@ -11,7 +11,7 @@
 | 00 | 저장소·결정 기록 | DONE | 기존 변경 보존, 런타임·네트워크·Docker 확인, ADR 0001 작성 |
 | 01 | 프로젝트 기반 | DONE | pnpm frozen 설치, lint·typecheck·단위/DB 통합 테스트·build, 웹/DB health·worker heartbeat 통과 |
 | 02 | DB·migration | DONE | 빈 DB·upgrade migration, 개발 seed 반복 실행, 실제 PostgreSQL 제약·동시성 테스트 통과 |
-| 03 | 인증·권한 | TODO | — |
+| 03 | 인증·권한 | DONE | DB 세션·역할·계정 잠금/폐기·감사 마스킹, 13개 PostgreSQL 통합 테스트와 production build 통과 |
 | 04 | 운영 설정 | TODO | — |
 | 05 | 예약 엔진 | TODO | — |
 | 06 | 직원 현장 운영 | TODO | — |
@@ -37,6 +37,7 @@
 | 2026-11-06 | 자동 No-show | 초기 OFF | 제안 | 현장 오처리 방지 |
 | 2026-11-06 | Node·웹 기반 | Node 24, Next.js 16.4.5, React 19.3.1, TypeScript 5.9.3 | 개발 기준 | 레지스트리 안정 버전과 요구사항 확인 |
 | 2026-11-06 | DB migration | PostgreSQL SQL 파일 + SHA-256 이력 + advisory lock | 개발 기준 | Prisma 바이너리 서버가 정책상 403, 검증 비활성화 없이 대체 |
+| 2026-11-07 | 직원 인증 | bcrypt 비밀번호 + JWT 쿠키 + DB 세션·실시간 멤버십 검사 | 개발 기준 | 퇴사·역할 변경을 즉시 반영하고 매장 간 접근 차단 |
 
 ## 테스트 기록
 
@@ -67,6 +68,16 @@ Step 02 실행 증거(2026-11-06 Asia/Taipei):
 - 결합 테이블과 단독 테이블 충돌, 반개구간 경계 허용, 해제 점유 재사용, 매장 간 FK, 활성 착석 중복, 정책 적용기간 중복 검증.
 - 시간 유틸리티 단위 테스트를 포함한 전체 단위 테스트 결과는 최종 검사 기록을 따른다.
 
+Step 03 실행 증거(2026-11-07 Asia/Taipei):
+
+- 인증 migration 추가. 전체 적용 migration 4개, pending 0.
+- bcrypt 비용 12 비밀번호, 8시간 DB 세션, HttpOnly·SameSite 쿠키, 로그인 5회 실패 시 15분 잠금을 구현.
+- STAFF·MANAGER·SYSTEM_ADMIN 역할과 요청별 활성 세션·사용자·매장 멤버십 검사를 구현.
+- 로그인·로그아웃·현재 권한·계정 생성·계정 비활성화 API와 직원 로그인 화면을 production build로 검증.
+- 실제 PostgreSQL 통합 테스트: 전체 3 files, 13 tests 통과. 다른 매장, 낮은 역할, 비활성 계정, 잠금, 세션 폐기, 감사 로그 마스킹을 포함.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, `pnpm build` 성공.
+- MFA 강제 게이트와 세션 검증 필드는 준비했다. 실제 MFA 등록·검증 수단은 운영 인증 제공 방식 확정 후 연결하며 현재 계정에는 활성화하지 않는다.
+
 ```text
 일시 / commit 또는 작업 revision:
 단계 / 실행 환경:
@@ -91,7 +102,7 @@ Step 02 실행 증거(2026-11-06 Asia/Taipei):
 
 ## 다음 작업
 
-Step 00~02가 완료됐다. 다음 작업은 Step 03의 인증·권한·감사 기록 구현이다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
+Step 00~03이 완료됐다. 다음 작업은 Step 04의 테이블·영업시간·정책 관리다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
 
 ## v2 개정 이력
 
