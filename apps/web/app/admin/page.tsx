@@ -2,6 +2,7 @@ import { AuthError, authorizeRestaurant } from "@reservation/auth";
 import { sessionSecret } from "@reservation/shared";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { z } from "zod";
 import { SESSION_COOKIE } from "../../lib/auth-http";
 import { database } from "../../lib/database";
@@ -34,6 +35,7 @@ export default async function AdminPage({
           <dt>매장</dt><dd>{user.restaurantId}</dd>
           <dt>역할</dt><dd>{user.role}</dd>
         </dl>
+        {user.role !== "STAFF" ? <p><Link href={`/admin/operations?restaurantId=${user.restaurantId}`}>운영 설정 관리</Link></p> : null}
         <LogoutButton />
       </main>
     );

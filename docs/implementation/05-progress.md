@@ -2,7 +2,7 @@
 
 최종 문서 작성일: 2026-11-07 (Asia/Taipei)
 
-현재 상태: Step 00~03 구현과 검증 완료. 브랜치는 `main`이며 PostgreSQL migration 4개가 적용돼 있다.
+현재 상태: Step 00~04 구현과 검증 완료. 브랜치는 `main`이며 PostgreSQL migration 7개가 적용돼 있다.
 
 ## 단계 추적
 
@@ -12,7 +12,7 @@
 | 01 | 프로젝트 기반 | DONE | pnpm frozen 설치, lint·typecheck·단위/DB 통합 테스트·build, 웹/DB health·worker heartbeat 통과 |
 | 02 | DB·migration | DONE | 빈 DB·upgrade migration, 개발 seed 반복 실행, 실제 PostgreSQL 제약·동시성 테스트 통과 |
 | 03 | 인증·권한 | DONE | DB 세션·역할·계정 잠금/폐기·감사 마스킹, 13개 PostgreSQL 통합 테스트와 production build 통과 |
-| 04 | 운영 설정 | TODO | — |
+| 04 | 운영 설정 | DONE | 테이블·결합·영업시간·특별일·차단·정책 관리, PostgreSQL 통합/불변성 검증과 관리자 화면 통과 |
 | 05 | 예약 엔진 | TODO | — |
 | 06 | 직원 현장 운영 | TODO | — |
 | 07 | 고객 웹 | TODO | — |
@@ -38,6 +38,7 @@
 | 2026-11-06 | Node·웹 기반 | Node 24, Next.js 16.4.5, React 19.3.1, TypeScript 5.9.3 | 개발 기준 | 레지스트리 안정 버전과 요구사항 확인 |
 | 2026-11-06 | DB migration | PostgreSQL SQL 파일 + SHA-256 이력 + advisory lock | 개발 기준 | Prisma 바이너리 서버가 정책상 403, 검증 비활성화 없이 대체 |
 | 2026-11-07 | 직원 인증 | bcrypt 비밀번호 + JWT 쿠키 + DB 세션·실시간 멤버십 검사 | 개발 기준 | 퇴사·역할 변경을 즉시 반영하고 매장 간 접근 차단 |
+| 2026-11-07 | 정책 게시 | DRAFT 새 버전 + 날짜 범위 게시 + 게시 후 DB 불변성 | 개발 기준 | 운영 변경 이력과 예약 평가 재현성 보존 |
 
 ## 테스트 기록
 
@@ -78,6 +79,16 @@ Step 03 실행 증거(2026-11-07 Asia/Taipei):
 - `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, `pnpm build` 성공.
 - MFA 강제 게이트와 세션 검증 필드는 준비했다. 실제 MFA 등록·검증 수단은 운영 인증 제공 방식 확정 후 연결하며 현재 계정에는 활성화하지 않는다.
 
+Step 04 실행 증거(2026-11-07 Asia/Taipei):
+
+- 테이블 생성·수정·비활성화, 활성 좌석 합계, 결합 테이블 구성원 생성·변경·비활성화를 구현.
+- 요일별 복수 영업 구간, 익일 종료, 주 경계 충돌 검사, 특별영업·임시휴무, 테이블 예약 차단을 구현.
+- 정책 필수 규칙 검증, 초안 버전, 조건 미리보기, 날짜 범위 게시, 적용 일정 중복 거부를 구현.
+- 게시 정책과 규칙의 수정·직접 삭제를 DB 트리거로 거부하고 정상 FK 연쇄 동작은 보존.
+- MANAGER 이상 서버 권한, 동일 출처 검사, 설정 변경 감사 로그와 영향 확인 응답을 적용.
+- 관리자 `/admin/operations` 화면과 운영 설정 API를 production build로 검증.
+- 실제 PostgreSQL 통합 테스트 전체 4 files, 19 tests 통과. 전체 migration 7개, pending 0.
+
 ```text
 일시 / commit 또는 작업 revision:
 단계 / 실행 환경:
@@ -102,7 +113,7 @@ Step 03 실행 증거(2026-11-07 Asia/Taipei):
 
 ## 다음 작업
 
-Step 00~03이 완료됐다. 다음 작업은 Step 04의 테이블·영업시간·정책 관리다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
+Step 00~04가 완료됐다. 다음 작업은 Step 05의 예약 엔진·좌석 확보·동시성 처리다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
 
 ## v2 개정 이력
 
