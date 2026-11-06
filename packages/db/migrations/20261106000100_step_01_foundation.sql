@@ -1,0 +1,6 @@
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE system_heartbeats (
+    service TEXT PRIMARY KEY,
+    checked_at TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

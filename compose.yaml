@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: reservation_dev
+      POSTGRES_USER: reservation
+      POSTGRES_PASSWORD: reservation_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservation -d reservation_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - reservation-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  reservation-postgres-data:

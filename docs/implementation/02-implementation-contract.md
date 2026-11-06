@@ -1,12 +1,14 @@
 # 구현 계약
 
+v2: Codex 직접 구현 기준. 업무상 직원의 예약 승인과 운영 정책 게시 기능은 예약 시스템의 기능이다. 외부 개발 도구의 실행 승인·publication과 관계없다.
+
 ## 1. 모듈 경계
 
 ```text
 apps/web                 고객·관리자 화면, HTTP API, 세션·요청 검증
 apps/worker              작업 실행, 만료, 발송, 결제 대사
 packages/domain          정책 평가, 예약 명령, 상태 전이
-packages/db              Prisma schema, SQL migration, 트랜잭션·쿼리
+packages/db              SQL migration, PostgreSQL 트랜잭션·쿼리
 packages/providers       SMS·결제·전화 Adapter
 packages/shared          타입, 오류 코드, 시간·금액 유틸리티
 docs/adr                 기술·정책 결정 근거
@@ -21,18 +23,19 @@ ID는 UUID를 사용하고 주요 변경 가능 엔티티에 `version`, `created
 
 | 모델 | 필수 필드·제약 |
 |---|---|
-| restaurants | timezone, currency, 기본 언어, 활성 정책 포인터 |
+| restaurants | timezone, currency, 기본 언어, 채널별 기능 활성 상태 |
 | users / restaurant_members | 인증 주체, 매장, 역할, 계정 활성 상태 |
 | dining_tables | restaurant_id, name, 기본·최대 좌석, 구역, 활성 기간; 매장 내 이름 유일 |
 | table_combinations / members | 최대 인원, 활성 기간, 실제 테이블 FK; 같은 테이블 중복 포함 금지 |
 | business_hours | 요일, 시작 현지시각, 종료 현지시각, 종료일 offset |
 | special_business_dates | 영업일, 휴무 또는 대체 구간; 날짜별 기준 중복 금지 |
 | reservation_blocks | 기간, 사유, 전체/테이블 범위, 작성자 |
-| policy_versions | 매장, 버전 번호, DRAFT/PUBLISHED/RETIRED, 방문일 적용 범위, 게시자 |
+| policy_versions | 매장, 버전 번호, DRAFT/PUBLISHED/RETIRED, 불변 정책 내용, 게시자 |
+| policy_schedules | 매장, 방문일 적용 범위, policy_version_id; 유효 범위 중복 금지, 변경 감사 |
 | policy_rules | 종류, 조건, 우선순위, 검증된 타입별 값; 버전 소속 |
 | reservations | 매장, 예약번호, 출처, 고객 연락처, 방문·종료시각, 영업일, 인원, 상태, expires_at, version |
 | reservation_policy_snapshots | 예약, 변경 revision, 정책 버전, 평가 입력·결과, 이용시간, 정리시간, 최소소비·예약금, 취소·환불 조건, 통화, 동의 문구 버전 |
-| reservation_allocations | 예약 또는 좌석 제안 소유자, 실제 table_id, occupied_period, released_at; 소유자는 정확히 하나 |
+| reservation_allocations | reservation_id 또는 waitlist_offer_id 중 정확히 하나, 실제 table_id, occupied_period, released_at; 소유자 FK와 XOR CHECK |
 | table_occupancies | 실제 착석·퇴석시각, 예약, table_id; 현재 착석 중인 테이블 중복 금지 |
 | reservation_changes | 원예약, 제안 조건·가격, 새 점유, 기한, 추가 결제 참조, 상태 |
 | reservation_events | 예약, 이벤트 종류, 행위자, 사유, 변경 revision, 발생시각 |
@@ -50,6 +53,12 @@ ID는 UUID를 사용하고 주요 변경 가능 엔티티에 `version`, `created
 정책 규칙은 예약·최소소비·예약금·취소·대기별 테이블로 분리하거나 타입별 스키마 검증을 둔다. 일반적인 무제한 JSON 설정 저장소로 대체하지 않는다. 예약 당시의 불변 결과와 제공업체별 비밀 아닌 옵션에는 JSON을 사용할 수 있다.
 
 금액은 최소 통화 단위 정수로 저장하며, 제공업체 Adapter가 업체 API의 단위로 변환한다. 실수 계산과 통화 단위 추측을 금지한다. 환불 누계는 성공 결제액을 초과하지 못하도록 결제 행 잠금 하에서 검증한다.
+
+HOLD는 별도 임시 예약 테이블이 아니라 `reservations.status = HOLD`인 예약이다. 제출은 같은 ID의 상태를 전이시킨다. HOLD ID만으로 접근하지 못하도록 생성 세션 소유권을 검증한다. 만료 HOLD의 개인정보는 보관 정책에 따라 정리하되 감사·결제 관계를 깨뜨리지 않는다.
+
+`reservation_changes`는 원예약을 참조하며 점유의 별도 소유자가 되지 않는다. 변경 대기 중 예약 소유의 점유가 기존·신규 구간을 함께 보호하고, 변경 행에 원래 배정과 목표 배정을 저장한다. 배정 구간은 서로 떨어져 있으면 별도 행으로, 겹치면 합친 구간으로 표현한다. 사이의 빈 시간까지 하나의 큰 구간으로 예약하지 않는다.
+
+미구현 단계의 테이블은 해당 기능 착수 시 migration으로 추가할 수 있다. MVP에서 미래 결제·음성 테이블까지 미리 구현해야 하는 의존성을 만들지 않는다.
 
 ## 3. 시간 계약
 
@@ -97,7 +106,7 @@ ID는 UUID를 사용하고 주요 변경 가능 엔티티에 `version`, `created
 
 배치는 기본적으로 남는 좌석이 적고, 사용 테이블 수가 적은 후보를 우선한다. 접근성·구역 요청은 지원되는 범위에서 제약으로 반영한다. 결합 최대 인원은 구성 테이블 좌석 총합 이하를 기본 검증으로 한다.
 
-유효 정책 범위는 방문일 기준이며 게시된 버전은 불변이다. 신규 버전 게시 시 적용 기간을 원자적으로 갱신하고 중복 유효 범위를 차단한다. HOLD가 생성된 조건은 해당 기한까지만 유지한다. 새 예약·변경 견적은 현재 유효 정책을 사용한다. 결제·승인 대기 중에는 접수 당시 스냅샷을 유지한다.
+유효 정책 범위는 방문일 기준이며 게시된 정책 내용은 불변이다. 별도 `policy_schedules`가 방문일과 버전을 연결한다. 신규 게시 시 이 일정만 감사 기록과 함께 원자적으로 갱신하고 중복 유효 범위를 차단한다. 기존 예약의 version 참조와 스냅샷은 수정하지 않는다. HOLD가 생성된 조건은 해당 기한까지만 유지한다. 새 예약·변경 견적은 현재 유효 정책을 사용한다. 결제·승인 대기 중에는 접수 당시 스냅샷을 유지한다.
 
 직원 정책 예외는 허용된 항목만 별도 override 필드와 사유로 기록한다. 수용 인원·물리적 중복 점유는 우회할 수 없다.
 
@@ -120,6 +129,7 @@ EXCLUDE USING gist (
 - 제약 충돌 시 제한적으로 다른 후보를 탐색한다. 모두 실패하면 `SLOT_UNAVAILABLE`을 반환한다.
 - 점유 여부를 먼저 읽고 나중에 무조건 삽입하는 구현을 금지한다.
 - 정책 게시·테이블 비활성·차단 등록과 예약 생성은 공유된 매장 스케줄 잠금 또는 동등한 직렬화 규칙으로 경합을 제어한다. 조회에서 확인한 설정 버전만 신뢰하지 않는다.
+- 초기 단일 매장은 모든 점유·설정 변경 트랜잭션에서 매장 스케줄 행을 먼저 잠그는 단순한 순서로 구현한다. 이후 예약/제안과 테이블을 ID 순서로 잠근다. 결제 확정·만료·변경·직원 처리도 같은 순서를 따르며 외부 HTTP 호출은 잠금 안에서 하지 않는다. 조회는 잠금을 잡지 않고 확정 요청에서 다시 검사한다.
 - 공개 HOLD는 세션·연락처·IP별 제한과 rate limit을 두고, 서버가 금액·테이블·만료시각을 결정한다. 고객이 임의 연장하지 못한다.
 
 ## 7. 예약 변경 계약
@@ -152,7 +162,8 @@ EXCLUDE USING gist (
 | POST /api/admin/reservations/{id}/complete | 퇴석·정리시간 처리 |
 | POST /api/admin/reservations/{id}/reassign | 테이블 재배정 |
 | POST /api/admin/policy-versions/{id}/publish | 검증된 정책 게시 |
-| POST /api/waitlist / offers/{id}/accept | 대기 등록·기한부 제안 수락 |
+| POST /api/waitlist | 대기 등록 |
+| POST /api/waitlist/offers/{id}/accept | 소유권 확인 후 기한부 제안 수락 |
 | POST /api/webhooks/{provider} | 제공업체 인증·서명 검증 후 이벤트 수신 |
 
 주요 오류: SLOT_UNAVAILABLE, HOLD_EXPIRED, POLICY_CONFLICT, VERSION_CONFLICT, APPROVAL_REQUIRED, PAYMENT_PENDING, PAYMENT_AFTER_EXPIRY, FORBIDDEN, RATE_LIMITED.

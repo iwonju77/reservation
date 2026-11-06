@@ -1,0 +1,23 @@
+{
+  "name": "@reservation/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "DOTENV_CONFIG_PATH=../../.env tsx watch src/index.ts",
+    "once": "DOTENV_CONFIG_PATH=../../.env WORKER_ONCE=true tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@reservation/db": "workspace:*",
+    "@reservation/shared": "workspace:*",
+    "dotenv": "17.3.1",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.6",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

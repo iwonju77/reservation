@@ -1,0 +1,36 @@
+{
+  "name": "seoul-uncle-reservation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "pnpm --filter @reservation/shared build && pnpm --filter @reservation/web build && pnpm --filter @reservation/worker build",
+    "dev": "pnpm --filter @reservation/web dev",
+    "worker:dev": "pnpm --filter @reservation/worker dev",
+    "worker:once": "pnpm --filter @reservation/worker once",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "node scripts/not-configured.mjs e2e",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate:deploy": "tsx packages/db/scripts/migrate.ts",
+    "db:migrate:status": "tsx packages/db/scripts/migrate.ts --status",
+    "db:seed:dev": "node scripts/not-configured.mjs seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.10.13",
+    "dotenv": "17.3.1",
+    "eslint": "10.14.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.56.1",
+    "vitest": "5.1.0"
+  }
+}
