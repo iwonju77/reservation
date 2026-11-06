@@ -21,7 +21,7 @@
     "db:down": "docker compose down",
     "db:migrate:deploy": "tsx packages/db/scripts/migrate.ts",
     "db:migrate:status": "tsx packages/db/scripts/migrate.ts --status",
-    "db:seed:dev": "node scripts/not-configured.mjs seed"
+    "db:seed:dev": "tsx packages/db/scripts/seed-dev.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -59,7 +59,18 @@ async function main(): Promise<void> {
 
     await client.query("SELECT pg_advisory_lock(hashtext('reservation_schema_migrations'))");
     try {
-      for (const migration of pending) {
+      const lockedAppliedResult = await client.query<AppliedMigration>(
+        "SELECT name, checksum FROM schema_migrations ORDER BY name",
+      );
+      const lockedApplied = new Map(lockedAppliedResult.rows.map((row) => [row.name, row.checksum]));
+      for (const migration of files) {
+        const recordedChecksum = lockedApplied.get(migration.name);
+        if (recordedChecksum && recordedChecksum !== migration.checksum) {
+          throw new Error(`Applied migration was modified: ${migration.name}`);
+        }
+      }
+
+      for (const migration of files.filter(({ name }) => !lockedApplied.has(name))) {
         await client.query("BEGIN");
         try {
           await client.query(migration.sql);

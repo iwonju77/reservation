@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 00 | 저장소·결정 기록 | DONE | 기존 변경 보존, 런타임·네트워크·Docker 확인, ADR 0001 작성 |
 | 01 | 프로젝트 기반 | DONE | pnpm frozen 설치, lint·typecheck·단위/DB 통합 테스트·build, 웹/DB health·worker heartbeat 통과 |
-| 02 | DB·migration | TODO | — |
+| 02 | DB·migration | DONE | 빈 DB·upgrade migration, 개발 seed 반복 실행, 실제 PostgreSQL 제약·동시성 테스트 통과 |
 | 03 | 인증·권한 | TODO | — |
 | 04 | 운영 설정 | TODO | — |
 | 05 | 예약 엔진 | TODO | — |
@@ -57,6 +57,16 @@ Step 01 실행 증거(2026-11-06 Asia/Taipei):
 - `test:e2e`, `db:seed:dev`: 후속 단계 전까지 의도적으로 미구현이며 실행 시 실패. Step 01 기능을 통과했다고 계산하지 않음.
 - Prisma CLI 시도: 공식 바이너리 서버가 403으로 거부. 체크섬 우회 없이 제거하고 검증 가능한 SQL runner로 전환.
 
+Step 02 실행 증거(2026-11-06 Asia/Taipei):
+
+- 예약 도메인 migration 2개 추가. 전체 적용 migration 3개, pending 0.
+- 별도 빈 DB에서 migration 3개를 처음부터 적용하고 pending 0 확인 후 검증 DB 삭제.
+- 개발 fixture를 연속 2회 실행해 같은 매장·테이블·결합·영업시간·정책이 중복되지 않음을 확인.
+- 실제 PostgreSQL 통합 테스트: 2 files, 7 tests 통과.
+- 같은 마지막 테이블에 10개 동시 점유 요청: 1개 성공, 9개 `23P01` 충돌.
+- 결합 테이블과 단독 테이블 충돌, 반개구간 경계 허용, 해제 점유 재사용, 매장 간 FK, 활성 착석 중복, 정책 적용기간 중복 검증.
+- 시간 유틸리티 단위 테스트를 포함한 전체 단위 테스트 결과는 최종 검사 기록을 따른다.
+
 ```text
 일시 / commit 또는 작업 revision:
 단계 / 실행 환경:
@@ -81,7 +91,7 @@ Step 01 실행 증거(2026-11-06 Asia/Taipei):
 
 ## 다음 작업
 
-Step 00과 Step 01은 완료됐다. 다음 작업은 Step 02의 예약 도메인 DB 모델, 점유 exclusion constraint, migration 검증 fixture 구현이다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
+Step 00~02가 완료됐다. 다음 작업은 Step 03의 인증·권한·감사 기록 구현이다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
 
 ## v2 개정 이력
 

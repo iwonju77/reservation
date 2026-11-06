@@ -16,6 +16,7 @@ cp .env.example apps/web/.env.local
 pnpm install --frozen-lockfile
 pnpm db:up
 pnpm db:migrate:deploy
+pnpm db:seed:dev
 pnpm dev
 ```
 
@@ -38,6 +39,8 @@ pnpm build
 pnpm worker:once
 ```
 
-`test:integration`과 `worker:once`에는 실행 중인 PostgreSQL과 적용된 migration이 필요하다. `test:e2e`와 `db:seed:dev`는 후속 단계 전까지 명시적으로 실패한다.
+`test:integration`, `worker:once`, `db:seed:dev`에는 실행 중인 PostgreSQL과 적용된 migration이 필요하다. `test:e2e`는 고객·직원 화면이 구현되는 후속 단계 전까지 명시적으로 실패한다.
+
+`db:seed:dev`는 `APP_ENV=development`이면서 DB 이름이 `_dev`로 끝날 때만 실행된다. 단독 테이블 4개, 2개·3개 결합, 주간·자정 경과 영업시간, 특별 휴무, 기본 정책 fixture를 반복 실행 가능하게 등록한다. 운영 DB 초기화에는 사용하지 않는다.
 
 상세 설계와 진행 상황은 [`docs/implementation/README.md`](docs/implementation/README.md)에서 확인한다.
