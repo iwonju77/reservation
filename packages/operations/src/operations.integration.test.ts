@@ -42,6 +42,7 @@ const requiredRules = [
 beforeAll(() => { pool = createDatabasePool(); });
 afterAll(async () => {
   if (restaurantIds.length) await pool.query("DELETE FROM audit_logs WHERE restaurant_id=ANY($1::uuid[])", [restaurantIds]);
+  if (restaurantIds.length) await pool.query("DELETE FROM reservations WHERE restaurant_id=ANY($1::uuid[])", [restaurantIds]);
   if (userIds.length) await pool.query("DELETE FROM users WHERE id=ANY($1::uuid[])", [userIds]);
   if (restaurantIds.length) await pool.query("DELETE FROM restaurants WHERE id=ANY($1::uuid[])", [restaurantIds]);
   await pool.end();
@@ -83,6 +84,11 @@ describe("operations management", () => {
     const table = await createDiningTable({ ...base, name: "B1", defaultSeats: 2, maxSeats: 2 });
     await setSpecialBusinessDate({ ...base, businessDate: "2032-01-01", kind: "SPECIAL_OPEN", reason: "신정 특별영업", periods: [{ opensAt: "17:00", closesAt: "21:00", closesDayOffset: 0 }] });
     await createReservationBlock({ ...base, tableId: table.id, startsAt: new Date("2032-01-01T09:00:00Z"), endsAt: new Date("2032-01-01T10:00:00Z"), reason: "정비" });
+    const reservationId=randomUUID();
+    await pool.query(`INSERT INTO reservations (id,restaurant_id,reservation_number,source,status,business_date,starts_at,ends_at,party_size,seat_count,chargeable_party_size)
+      VALUES ($1,$2,$3,'STAFF','CONFIRMED','2032-01-01',$4,$5,2,2,2)`,[reservationId,base.restaurantId,`R-${reservationId.slice(0,8)}`,new Date("2032-01-01T11:00:00Z"),new Date("2032-01-01T12:00:00Z")]);
+    await pool.query("INSERT INTO reservation_allocations (restaurant_id,reservation_id,table_id,occupied_period) VALUES ($1,$2,$3,tstzrange($4,$5,'[)'))",[base.restaurantId,reservationId,table.id,new Date("2032-01-01T11:00:00Z"),new Date("2032-01-01T12:15:00Z")]);
+    await expect(createReservationBlock({ ...base,tableId:table.id,startsAt:new Date("2032-01-01T11:30:00Z"),endsAt:new Date("2032-01-01T12:30:00Z"),reason:"충돌" })).rejects.toMatchObject({code:"IMPACT_CONFIRMATION_REQUIRED"});
     const config = await getOperationsConfiguration(base);
     expect(config.specialDates).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "SPECIAL_OPEN" })]));
     expect(config.blocks).toEqual(expect.arrayContaining([expect.objectContaining({ reason: "정비" })]));
@@ -96,6 +102,8 @@ describe("operations management", () => {
     await publishPolicy({ ...base, policyId: draft.id, validFrom: "2035-01-01", validUntil: "2036-01-01" });
     await expect(pool.query("UPDATE reservation_policy_rules SET duration_minutes=120 WHERE policy_version_id=$1 AND rule_type='DURATION'", [draft.id]))
       .rejects.toMatchObject({ code: "55000" });
+    await expect(pool.query("UPDATE policy_schedules SET valid_during=daterange('2035-01-02','2036-01-01','[)') WHERE policy_version_id=$1",[draft.id]))
+      .rejects.toMatchObject({code:"55000"});
     const conflict = await createPolicyDraft({ ...base, name: "충돌", rules: requiredRules });
     await expect(publishPolicy({ ...base, policyId: conflict.id, validFrom: "2035-06-01", validUntil: "2036-06-01" }))
       .rejects.toMatchObject({ code: "POLICY_CONFLICT" });

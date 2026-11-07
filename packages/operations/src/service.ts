@@ -110,6 +110,7 @@ export async function updateDiningTable(input: AuthorizedInput & {
     throw new OperationsError("INVALID_CONFIGURATION", "Table capacity is invalid");
   }
   await transaction(input.pool, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [input.restaurantId]);
     const current = await client.query<{ name: string; inactive_at: Date | null }>(
       "SELECT name, inactive_at FROM dining_tables WHERE id = $1 AND restaurant_id = $2 FOR UPDATE", [input.tableId, input.restaurantId],
     );
@@ -176,6 +177,7 @@ export async function updateTableCombination(input: AuthorizedInput & { combinat
 export async function replaceBusinessHours(input: AuthorizedInput & { periods: BusinessPeriodInput[] }): Promise<void> {
   validateBusinessPeriods(input.periods); const actor = await manager(input);
   await transaction(input.pool, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [input.restaurantId]);
     await client.query("DELETE FROM business_hours WHERE restaurant_id=$1", [input.restaurantId]);
     for (const period of input.periods) await client.query(
       `INSERT INTO business_hours (restaurant_id, weekday, opens_at, closes_at, closes_day_offset)
@@ -191,6 +193,7 @@ export async function setSpecialBusinessDate(input: AuthorizedInput & { business
   if (input.kind === "SPECIAL_OPEN" && !periods.length) throw new OperationsError("INVALID_CONFIGURATION", "Special opening requires a period");
   validateBusinessPeriods(periods.map((period) => ({ ...period, weekday: 0 })));
   return transaction(input.pool, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [input.restaurantId]);
     const result = await client.query<{ id: string }>(
       `INSERT INTO special_business_dates (restaurant_id,business_date,kind,reason) VALUES ($1,$2,$3,$4)
        ON CONFLICT (restaurant_id,business_date) DO UPDATE SET kind=EXCLUDED.kind,reason=EXCLUDED.reason RETURNING id`,
@@ -211,6 +214,14 @@ export async function createReservationBlock(input: AuthorizedInput & { tableId?
   const actor = await manager(input);
   if (input.endsAt <= input.startsAt || !input.reason.trim()) throw new OperationsError("INVALID_CONFIGURATION", "Block period is invalid");
   return transaction(input.pool, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [input.restaurantId]);
+    const impact = await client.query<{ count: string }>(
+      `SELECT count(DISTINCT reservation_id)::text AS count FROM reservation_allocations
+       WHERE restaurant_id=$1 AND released_at IS NULL AND occupied_period && tstzrange($2,$3,'[)')
+         AND ($4::uuid IS NULL OR table_id=$4)`,
+      [input.restaurantId,input.startsAt,input.endsAt,input.tableId ?? null],
+    );
+    if (Number(impact.rows[0]?.count ?? 0)>0) throw new OperationsError("IMPACT_CONFIRMATION_REQUIRED","Existing reservations overlap this block",{reservations:Number(impact.rows[0]?.count)});
     const id = randomUUID();
     await client.query(
       `INSERT INTO reservation_blocks (id,restaurant_id,table_id,blocked_period,reason,created_by)
@@ -244,6 +255,7 @@ export async function publishPolicy(input: AuthorizedInput & { policyId: string;
   const actor = await manager(input);
   if (input.validUntil && input.validUntil <= input.validFrom) throw new OperationsError("INVALID_CONFIGURATION", "Policy end date must follow its start date");
   await transaction(input.pool, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [input.restaurantId]);
     const policy = await client.query<{ status: string }>("SELECT status FROM policy_versions WHERE id=$1 AND restaurant_id=$2 FOR UPDATE", [input.policyId, input.restaurantId]);
     if (!policy.rows[0]) throw new OperationsError("NOT_FOUND", "Policy was not found");
     if (policy.rows[0].status !== "DRAFT") throw new OperationsError("INVALID_CONFIGURATION", "Only a draft can be published");

@@ -93,27 +93,46 @@ async function main(): Promise<void> {
       [ids.specialDate, ids.restaurant],
     );
 
+    const incompatiblePolicy = await client.query<{ status: string; baseline_count: number }>(
+      `SELECT pv.status, count(r.id) FILTER (WHERE r.rule_type IN ('BOOKING_WINDOW','PARTY_LIMIT','DURATION','START_INTERVAL'))::int AS baseline_count
+       FROM policy_versions pv LEFT JOIN reservation_policy_rules r ON r.policy_version_id=pv.id
+       WHERE pv.id=$1 GROUP BY pv.id`, [ids.policy],
+    );
+    if (incompatiblePolicy.rows[0]?.status === "PUBLISHED" && incompatiblePolicy.rows[0].baseline_count < 4) {
+      throw new Error("Legacy development policy is incomplete; recreate reservation_dev before seeding");
+    }
     await client.query(
-      `INSERT INTO policy_versions (id, restaurant_id, version, status, published_at)
-       VALUES ($1, $2, 1, 'PUBLISHED', CURRENT_TIMESTAMP)
+      `INSERT INTO policy_versions (id, restaurant_id, version, status, name)
+       VALUES ($1, $2, 1, 'DRAFT', '개발 fixture 기본 정책')
        ON CONFLICT (restaurant_id, version) DO NOTHING`,
       [ids.policy, ids.restaurant],
     );
     await client.query(
+      `INSERT INTO reservation_policy_rules
+         (policy_version_id, rule_type, priority, min_party_size, max_party_size, duration_minutes, amount_minor, value)
+       SELECT $1,v.rule_type,0,v.min_party_size,v.max_party_size,v.duration_minutes,v.amount_minor,v.value
+       FROM (VALUES
+         ('BOOKING_WINDOW',NULL::int,NULL::int,NULL::int,NULL::bigint,'{"opensDaysAhead":30,"cutoffMinutes":120}'::jsonb),
+         ('PARTY_LIMIT',1,12,NULL,NULL,'{}'::jsonb),
+         ('DURATION',NULL,NULL,90,NULL,'{}'::jsonb),
+         ('CLEANUP',NULL,NULL,15,NULL,'{}'::jsonb),
+         ('START_INTERVAL',NULL,NULL,30,NULL,'{}'::jsonb),
+         ('APPROVAL',NULL,NULL,NULL,NULL,'{"required":false}'::jsonb),
+         ('DEPOSIT',NULL,NULL,NULL,0,'{}'::jsonb)
+       ) AS v(rule_type,min_party_size,max_party_size,duration_minutes,amount_minor,value)
+       WHERE (SELECT status FROM policy_versions WHERE id=$1)='DRAFT'
+         AND NOT EXISTS (SELECT 1 FROM reservation_policy_rules r WHERE r.policy_version_id=$1 AND r.rule_type=v.rule_type)`,
+      [ids.policy],
+    );
+    await client.query(
       `INSERT INTO policy_schedules (id, restaurant_id, policy_version_id, valid_during)
-       VALUES ($1, $2, $3, daterange(DATE '2026-01-01', NULL, '[)'))
-       ON CONFLICT (id) DO NOTHING`,
+       SELECT $1, $2, $3, daterange(DATE '2026-01-01', NULL, '[)')
+       WHERE NOT EXISTS (SELECT 1 FROM policy_schedules WHERE id=$1)`,
       [ids.schedule, ids.restaurant, ids.policy],
     );
     await client.query(
-      `INSERT INTO reservation_policy_rules
-         (policy_version_id, rule_type, priority, duration_minutes, value)
-       SELECT $1, 'DURATION', 0, 90, '{"description":"개발 fixture 기본 이용시간"}'::jsonb
-       WHERE NOT EXISTS (
-         SELECT 1 FROM reservation_policy_rules
-         WHERE policy_version_id = $1 AND rule_type = 'DURATION' AND priority = 0
-       )`,
-      [ids.policy],
+      `UPDATE policy_versions SET status='PUBLISHED',published_at=CURRENT_TIMESTAMP
+       WHERE id=$1 AND status='DRAFT'`, [ids.policy],
     );
     await client.query("COMMIT");
     console.log(JSON.stringify({ seeded: true, restaurantId: ids.restaurant, tableCount: ids.tables.length }));

@@ -12,6 +12,7 @@
     "@reservation/auth": "workspace:*",
     "@reservation/db": "workspace:*",
     "@reservation/operations": "workspace:*",
+    "@reservation/reservation-engine": "workspace:*",
     "@reservation/shared": "workspace:*",
     "next": "16.4.5",
     "react": "19.3.1",

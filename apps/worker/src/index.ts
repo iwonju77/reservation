@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { databaseUrl, runtimeConfig } from "@reservation/shared";
+import { createDatabasePool } from "@reservation/db";
+import { processDueJobs } from "@reservation/reservation-engine";
 import pg from "pg";
 
 const { Client } = pg;
@@ -20,12 +22,21 @@ async function heartbeat(): Promise<void> {
   }
 }
 
+async function work(): Promise<void> {
+  const pool = createDatabasePool();
+  try {
+    const processed = await processDueJobs(pool, `worker-${process.pid}`);
+    console.log(JSON.stringify({ level: "info", event: "worker.jobs", processed }));
+  } finally { await pool.end(); }
+}
+
 async function main(): Promise<void> {
   await heartbeat();
+  await work();
   if (process.env.WORKER_ONCE === "true") return;
 
   setInterval(() => {
-    void heartbeat().catch((error: unknown) => {
+    void Promise.all([heartbeat(), work()]).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "unknown error";
       console.error(JSON.stringify({ level: "error", event: "worker.heartbeat", message }));
     });

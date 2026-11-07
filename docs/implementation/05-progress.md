@@ -1,8 +1,8 @@
 # 구현 진행 상황
 
-최종 문서 작성일: 2026-11-07 (Asia/Taipei)
+최종 문서 작성일: 2026-11-08 (Asia/Taipei)
 
-현재 상태: Step 00~04 구현과 검증 완료. 브랜치는 `main`이며 PostgreSQL migration 7개가 적용돼 있다.
+현재 상태: Step 00~05 구현과 검증 완료. 브랜치는 `main`이며 PostgreSQL migration 10개가 적용돼 있다.
 
 ## 단계 추적
 
@@ -13,7 +13,7 @@
 | 02 | DB·migration | DONE | 빈 DB·upgrade migration, 개발 seed 반복 실행, 실제 PostgreSQL 제약·동시성 테스트 통과 |
 | 03 | 인증·권한 | DONE | DB 세션·역할·계정 잠금/폐기·감사 마스킹, 13개 PostgreSQL 통합 테스트와 production build 통과 |
 | 04 | 운영 설정 | DONE | 테이블·결합·영업시간·특별일·차단·정책 관리, PostgreSQL 통합/불변성 검증과 관리자 화면 통과 |
-| 05 | 예약 엔진 | TODO | — |
+| 05 | 예약 엔진 | DONE | 정책 평가·가용성·HOLD·제출·만료·멱등·outbox·worker lease와 PostgreSQL 동시성 검증 통과 |
 | 06 | 직원 현장 운영 | TODO | — |
 | 07 | 고객 웹 | TODO | — |
 | 08 | worker·SMS | TODO | 업체·계정 미확정 |
@@ -39,6 +39,8 @@
 | 2026-11-06 | DB migration | PostgreSQL SQL 파일 + SHA-256 이력 + advisory lock | 개발 기준 | Prisma 바이너리 서버가 정책상 403, 검증 비활성화 없이 대체 |
 | 2026-11-07 | 직원 인증 | bcrypt 비밀번호 + JWT 쿠키 + DB 세션·실시간 멤버십 검사 | 개발 기준 | 퇴사·역할 변경을 즉시 반영하고 매장 간 접근 차단 |
 | 2026-11-07 | 정책 게시 | DRAFT 새 버전 + 날짜 범위 게시 + 게시 후 DB 불변성 | 개발 기준 | 운영 변경 이력과 예약 평가 재현성 보존 |
+| 2026-11-08 | 예약 좌석 확보 | 10분 HOLD + 실제 테이블별 allocation + DB exclusion constraint | 개발 기준 | 단독·결합 좌석의 마지막 동시 요청을 DB에서 직렬화 |
+| 2026-11-08 | 설정·예약 경합 | 예약 shared / 설정 exclusive advisory lock | 개발 기준 | 차단·정책 변경과 예약 생성의 불일치 방지 |
 
 ## 테스트 기록
 
@@ -89,6 +91,17 @@ Step 04 실행 증거(2026-11-07 Asia/Taipei):
 - 관리자 `/admin/operations` 화면과 운영 설정 API를 production build로 검증.
 - 실제 PostgreSQL 통합 테스트 전체 4 files, 19 tests 통과. 전체 migration 7개, pending 0.
 
+Step 05 실행 증거(2026-11-08 Asia/Taipei):
+
+- 정책 평가, 가용성 조회, 10분 HOLD 생성, 같은 예약 ID 제출과 상태 전이를 구현.
+- 영업시간·특별일·차단·비활성 좌석, 이용시간·정리시간·시작 간격·예약 오픈/마감을 후보 계산에 적용.
+- 단독·결합 테이블을 실제 테이블별로 점유하고 정책 스냅샷·상태 이벤트·outbox·만료 작업을 한 트랜잭션에 기록.
+- 동일 멱등 요청 재사용, 다른 payload 충돌, 고객 세션 소유권, 예상 version, 활성 HOLD 3개 제한을 구현.
+- worker `SKIP LOCKED` claim, lease, savepoint 실패 기록, 재시도, HOLD 만료와 점유 해제를 구현. 요청 경로에서도 만료 정리.
+- 승인 필요 예약은 `PENDING_APPROVAL`, 예약금 필요 예약은 `PENDING_PAYMENT`, 그 외만 `CONFIRMED`로 전이.
+- PostgreSQL 통합 테스트 전체 5 files, 29 tests 통과. 마지막 테이블 20개 동시 요청 중 1개 성공을 포함.
+- migration 10개, pending 0. production build에서 가용성·HOLD·제출 API와 worker 컴파일 성공.
+
 ```text
 일시 / commit 또는 작업 revision:
 단계 / 실행 환경:
@@ -113,7 +126,7 @@ Step 04 실행 증거(2026-11-07 Asia/Taipei):
 
 ## 다음 작업
 
-Step 00~04가 완료됐다. 다음 작업은 Step 05의 예약 엔진·좌석 확보·동시성 처리다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
+Step 00~05가 완료됐다. 다음 작업은 Step 06의 직원용 현장 운영 화면이다. 실제 운영값이 없어도 개발 fixture로 시작할 수 있다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
 
 ## v2 개정 이력
 
