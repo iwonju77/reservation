@@ -3,6 +3,7 @@ import { databaseUrl, runtimeConfig } from "@reservation/shared";
 import { createDatabasePool } from "@reservation/db";
 import { processDueJobs } from "@reservation/reservation-engine";
 import {FakeNotificationProvider,processNotificationOutbox,retryNotifications} from "@reservation/notifications";
+import {expirePaymentIntents} from "@reservation/payments";
 import pg from "pg";
 
 const { Client } = pg;
@@ -29,7 +30,8 @@ async function work(): Promise<void> {
     const processed = await processDueJobs(pool, `worker-${process.pid}`);
     const notifications=await processNotificationOutbox(pool,new FakeNotificationProvider(),`worker-${process.pid}`);
     const retries=await retryNotifications(pool);
-    console.log(JSON.stringify({ level: "info", event: "worker.jobs", processed,notifications,retries }));
+    const expiredPayments=await expirePaymentIntents(pool);
+    console.log(JSON.stringify({ level: "info", event: "worker.jobs", processed,notifications,retries,expiredPayments }));
   } finally { await pool.end(); }
 }
 

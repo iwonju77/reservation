@@ -12,6 +12,7 @@
     "@reservation/auth": "workspace:*",
     "@reservation/db": "workspace:*",
     "@reservation/operations": "workspace:*",
+    "@reservation/payments": "workspace:*",
     "@reservation/reservation-engine": "workspace:*",
     "@reservation/staff-operations": "workspace:*",
     "@reservation/shared": "workspace:*",

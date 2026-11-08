@@ -44,6 +44,9 @@ importers:
       '@reservation/operations':
         specifier: workspace:*
         version: link:../../packages/operations
+      '@reservation/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@reservation/reservation-engine':
         specifier: workspace:*
         version: link:../../packages/reservation-engine
@@ -84,6 +87,9 @@ importers:
       '@reservation/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
+      '@reservation/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@reservation/reservation-engine':
         specifier: workspace:*
         version: link:../../packages/reservation-engine
@@ -169,6 +175,22 @@ importers:
       '@reservation/auth':
         specifier: workspace:*
         version: link:../auth
+      '@reservation/db':
+        specifier: workspace:*
+        version: link:../db
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: 8.15.6
+        version: 8.15.6
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/payments:
+    dependencies:
       '@reservation/db':
         specifier: workspace:*
         version: link:../db
