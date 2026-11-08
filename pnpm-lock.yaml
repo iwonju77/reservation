@@ -50,6 +50,9 @@ importers:
       '@reservation/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@reservation/staff-operations':
+        specifier: workspace:*
+        version: link:../../packages/staff-operations
       next:
         specifier: 16.4.5
         version: 16.4.5(@types/node@24.10.13)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -183,6 +186,28 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/staff-operations:
+    dependencies:
+      '@reservation/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@reservation/db':
+        specifier: workspace:*
+        version: link:../db
+      '@reservation/reservation-engine':
+        specifier: workspace:*
+        version: link:../reservation-engine
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: 8.15.6
+        version: 8.15.6
       typescript:
         specifier: 5.9.3
         version: 5.9.3

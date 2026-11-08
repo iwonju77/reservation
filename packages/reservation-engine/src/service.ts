@@ -103,7 +103,7 @@ export async function expireHolds(pool: DatabasePool, now = new Date()): Promise
 }
 
 function requestHash(input: HoldRequest): string {
-  return createHash("sha256").update(JSON.stringify({ restaurantId: input.restaurantId, businessDate: input.businessDate, startsAt: input.startsAt.toISOString(), partySize: input.partySize, seatCount: input.seatCount ?? input.partySize })).digest("hex");
+  return createHash("sha256").update(JSON.stringify({ restaurantId: input.restaurantId, businessDate: input.businessDate, startsAt: input.startsAt.toISOString(), partySize: input.partySize, seatCount: input.seatCount ?? input.partySize, source: input.source ?? "WEB" })).digest("hex");
 }
 
 async function candidates(client: PoolClient, restaurantId: string, seats: number): Promise<string[][]> {
@@ -139,7 +139,7 @@ export async function createHold(input: HoldRequest) {
     const policy = await loadPolicy(client, input.restaurantId, input.businessDate, input.partySize, input.startsAt);
     const endsAt = new Date(input.startsAt.getTime() + policy.durationMinutes * 60_000);
     const occupiedUntil = new Date(endsAt.getTime() + policy.cleanupMinutes * 60_000);
-    if (input.startsAt.getTime() - now.getTime() < policy.cutoffMinutes*60_000 || input.startsAt.getTime() - now.getTime() > policy.opensDaysAhead*86_400_000) throw new ReservationError("INVALID_REQUEST", "Requested time is outside the booking window");
+    if (!input.bypassBookingWindow && (input.startsAt.getTime() - now.getTime() < policy.cutoffMinutes*60_000 || input.startsAt.getTime() - now.getTime() > policy.opensDaysAhead*86_400_000)) throw new ReservationError("INVALID_REQUEST", "Requested time is outside the booking window");
     const restaurantZone = await client.query<{ timezone: string }>("SELECT timezone FROM restaurants WHERE id=$1", [input.restaurantId]);
     const localStart = localDateTime(input.startsAt,restaurantZone.rows[0]?.timezone ?? "UTC");
     if (localStart.minutes % policy.startIntervalMinutes !== 0) throw new ReservationError("INVALID_REQUEST", "Start time does not match the policy interval");
@@ -149,8 +149,8 @@ export async function createHold(input: HoldRequest) {
     const reservationId = randomUUID(); const expiresAt = new Date(now.getTime() + HOLD_MINUTES * 60_000);
     await client.query(
       `INSERT INTO reservations (id,restaurant_id,reservation_number,source,status,business_date,starts_at,ends_at,party_size,seat_count,chargeable_party_size,expires_at,hold_owner_scope)
-       VALUES ($1,$2,$3,'WEB','HOLD',$4,$5,$6,$7,$8,$7,$9,$10)`,
-      [reservationId,input.restaurantId,`H-${reservationId.slice(0,8).toUpperCase()}`,input.businessDate,input.startsAt,endsAt,input.partySize,seats,expiresAt,input.ownerScope],
+       VALUES ($1,$2,$3,$11,'HOLD',$4,$5,$6,$7,$8,$7,$9,$10)`,
+      [reservationId,input.restaurantId,`H-${reservationId.slice(0,8).toUpperCase()}`,input.businessDate,input.startsAt,endsAt,input.partySize,seats,expiresAt,input.ownerScope,input.source ?? "WEB"],
     );
     let allocated = false;
     for (const tableIds of await candidates(client, input.restaurantId, seats)) {

@@ -35,6 +35,7 @@ export default async function AdminPage({
           <dt>매장</dt><dd>{user.restaurantId}</dd>
           <dt>역할</dt><dd>{user.role}</dd>
         </dl>
+        <p><Link href={`/admin/floor?restaurantId=${user.restaurantId}`}>현장 운영 보드</Link></p>
         {user.role !== "STAFF" ? <p><Link href={`/admin/operations?restaurantId=${user.restaurantId}`}>운영 설정 관리</Link></p> : null}
         <LogoutButton />
       </main>

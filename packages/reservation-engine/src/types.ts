@@ -19,4 +19,6 @@ export type HoldRequest = {
   partySize: number;
   seatCount?: number | undefined;
   now?: Date | undefined;
+  source?: "WEB" | "STAFF" | "WALK_IN" | undefined;
+  bypassBookingWindow?: boolean | undefined;
 };

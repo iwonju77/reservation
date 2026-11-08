@@ -19,3 +19,10 @@ h1 { font-size: clamp(2rem, 7vw, 4rem); margin: 0.4rem 0 1rem; }
 .settings-form input, .settings-form select, .settings-form button { padding: 0.55rem; font: inherit; }
 .settings-form button { background: #9c3f28; border: 0; border-radius: 0.35rem; color: white; font-weight: 700; }
 .form-note { color: #6b6258; font-size: 0.9rem; }
+.floor-page { max-width: 80rem; margin-top: 3vh; }
+.floor-grid { display: grid; grid-template-columns: minmax(0,2fr) minmax(16rem,1fr); gap: 1rem; }
+.reservation-card { border: 1px solid #d8cec2; border-radius: 0.6rem; margin: 0.6rem 0; padding: 0.8rem; }
+.action-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.action-row button { min-height: 2.6rem; padding: 0.5rem 0.8rem; }
+@media (max-width: 700px) { .floor-grid { grid-template-columns: 1fr; } }
+@media print { .settings-form, .action-row, .form-note, button { display: none !important; } .floor-page { margin: 0; max-width: none; } }
