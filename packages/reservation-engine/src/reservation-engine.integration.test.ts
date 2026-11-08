@@ -2,12 +2,13 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { createDatabasePool, type DatabasePool } from "@reservation/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createHold, expireHolds, getAvailability, processDueJobs, submitHold } from "./service";
+import { cancelCustomerReservation,changeCustomerReservation,createHold,expireHolds,getAvailability,getCustomerReservation,processDueJobs,submitHold } from "./service";
 
 let pool: DatabasePool;
 const restaurantIds: string[] = [];
 const future = new Date("2035-06-10T10:00:00.000Z");
 const now = new Date("2035-06-01T00:00:00.000Z");
+const customer={customerName:"테스트 고객",customerPhone:"+886900000000",customerLocale:"ko",termsVersion:"terms-v1",privacyVersion:"privacy-v1"};
 
 async function fixture(tableCapacities = [4], policyOptions: { approval?: boolean; depositMinor?: number } = {}) {
   const restaurantId = randomUUID(); const policyId = randomUUID(); restaurantIds.push(restaurantId);
@@ -93,19 +94,25 @@ describe("reservation engine", () => {
   it("submits the same reservation id and emits a confirmed transition", async () => {
     const { restaurantId } = await fixture([4]); const ownerScope = randomUUID();
     const created = await hold(restaurantId,{ ownerScope });
-    const submitted = await submitHold({ pool,reservationId:created.reservationId,ownerScope,expectedVersion:1,now:new Date(now.getTime()+60_000) });
+    const submitted = await submitHold({ pool,reservationId:created.reservationId,ownerScope,expectedVersion:1,now:new Date(now.getTime()+60_000),...customer });
     expect(submitted).toMatchObject({ reservationId:created.reservationId,status:"CONFIRMED",version:2 });
     const outbox = await pool.query<{ count: string }>("SELECT count(*)::text AS count FROM outbox_events WHERE aggregate_id=$1", [created.reservationId]);
     expect(Number(outbox.rows[0]?.count)).toBe(2);
   });
 
+  it("protects customer management and atomically changes then cancels a reservation",async()=>{const {restaurantId}=await fixture([4]);const ownerScope=randomUUID();const created=await hold(restaurantId,{ownerScope});const submitted=await submitHold({pool,reservationId:created.reservationId,ownerScope,expectedVersion:1,now:new Date(now.getTime()+60000),...customer});expect(submitted.managementToken).toBeTypeOf("string");const token=submitted.managementToken!;
+    await expect(getCustomerReservation({pool,reservationId:created.reservationId,token:"wrong"})).rejects.toMatchObject({code:"FORBIDDEN"});await expect(getCustomerReservation({pool,reservationId:created.reservationId,token})).resolves.toMatchObject({customer_name:"테스트 고객",version:2});
+    const changed=await changeCustomerReservation({pool,reservationId:created.reservationId,token,expectedVersion:2,businessDate:"2035-06-10",startsAt:new Date("2035-06-10T11:45:00Z"),partySize:3,now});expect(changed.version).toBe(3);
+    await expect(cancelCustomerReservation({pool,reservationId:created.reservationId,token,expectedVersion:3})).resolves.toMatchObject({status:"CANCELLED",version:4});
+  });
+
   it("does not confirm reservations that still require approval or payment", async () => {
     const approvalFixture=await fixture([4],{approval:true}); const approvalOwner=randomUUID();
     const approvalHold=await hold(approvalFixture.restaurantId,{ownerScope:approvalOwner});
-    await expect(submitHold({pool,reservationId:approvalHold.reservationId,ownerScope:approvalOwner,expectedVersion:1,now:new Date(now.getTime()+60_000)})).resolves.toMatchObject({status:"PENDING_APPROVAL"});
+    await expect(submitHold({pool,reservationId:approvalHold.reservationId,ownerScope:approvalOwner,expectedVersion:1,now:new Date(now.getTime()+60_000),...customer})).resolves.toMatchObject({status:"PENDING_APPROVAL"});
     const paymentFixture=await fixture([4],{depositMinor:1000}); const paymentOwner=randomUUID();
     const paymentHold=await hold(paymentFixture.restaurantId,{ownerScope:paymentOwner});
-    await expect(submitHold({pool,reservationId:paymentHold.reservationId,ownerScope:paymentOwner,expectedVersion:1,now:new Date(now.getTime()+60_000)})).resolves.toMatchObject({status:"PENDING_PAYMENT"});
+    await expect(submitHold({pool,reservationId:paymentHold.reservationId,ownerScope:paymentOwner,expectedVersion:1,now:new Date(now.getTime()+60_000),...customer})).resolves.toMatchObject({status:"PENDING_PAYMENT"});
   });
 
   it("limits one guest session to three simultaneous holds", async () => {
