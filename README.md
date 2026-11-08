@@ -38,6 +38,8 @@ MANAGER와 SYSTEM_ADMIN은 로그인 후 `/admin/operations?restaurantId=<매장
 
 고객은 `/reserve/<매장 UUID>`에서 번체중문 또는 한국어로 예약한다. 제출 후 발급되는 관리 링크에서 예약 조회·취소와 예약금 없는 변경을 수행한다.
 
+worker는 예약 outbox를 소비해 개발 환경의 fake SMS 발송 이력을 기록한다. 실제 SMS 발송은 업체 Adapter와 운영 계정이 확정될 때까지 비활성 상태다.
+
 ## 검증
 
 ```sh

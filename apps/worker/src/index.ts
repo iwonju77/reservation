@@ -2,6 +2,7 @@ import "dotenv/config";
 import { databaseUrl, runtimeConfig } from "@reservation/shared";
 import { createDatabasePool } from "@reservation/db";
 import { processDueJobs } from "@reservation/reservation-engine";
+import {FakeNotificationProvider,processNotificationOutbox,retryNotifications} from "@reservation/notifications";
 import pg from "pg";
 
 const { Client } = pg;
@@ -26,7 +27,9 @@ async function work(): Promise<void> {
   const pool = createDatabasePool();
   try {
     const processed = await processDueJobs(pool, `worker-${process.pid}`);
-    console.log(JSON.stringify({ level: "info", event: "worker.jobs", processed }));
+    const notifications=await processNotificationOutbox(pool,new FakeNotificationProvider(),`worker-${process.pid}`);
+    const retries=await retryNotifications(pool);
+    console.log(JSON.stringify({ level: "info", event: "worker.jobs", processed,notifications,retries }));
   } finally { await pool.end(); }
 }
 

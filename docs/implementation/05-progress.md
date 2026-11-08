@@ -2,7 +2,7 @@
 
 최종 문서 작성일: 2026-11-08 (Asia/Taipei)
 
-현재 상태: Step 00~07 구현과 검증 완료. 브랜치는 `main`이며 PostgreSQL migration 11개가 적용돼 있다.
+현재 상태: Step 00~07 완료, Step 08 개발 기반 완료·실 SMS 연동 BLOCKED. PostgreSQL migration 12개가 적용돼 있다.
 
 ## 단계 추적
 
@@ -16,7 +16,7 @@
 | 05 | 예약 엔진 | DONE | 정책 평가·가용성·HOLD·제출·만료·멱등·outbox·worker lease와 PostgreSQL 동시성 검증 통과 |
 | 06 | 직원 현장 운영 | DONE | 당일 보드·직원/현장 예약·상태 전이·착석·재배정·연장·무결제 변경·No-show 복구 검증 통과 |
 | 07 | 고객 웹 | DONE | 번체중문/한국어 모바일 예약·HOLD 복구·동의·관리 토큰·조회·취소·무결제 변경 검증 통과 |
-| 08 | worker·SMS | TODO | 업체·계정 미확정 |
+| 08 | worker·SMS | BLOCKED | Provider·fake·템플릿·outbox lease·발송 이력 완료. 실제 업체·계정·발신번호 미확정 |
 | 09 | 결제·환불 | TODO | 업체·계정·실제 금액 정책 미확정 |
 | 10 | 예약 변경 | TODO | — |
 | 11 | 대기명단 | TODO | — |
@@ -121,6 +121,14 @@ Step 07 실행 증거(2026-11-08 Asia/Taipei):
 - 예약금이 있는 변경은 결제 차액 처리가 구현되는 Step 10 전까지 명시적으로 거부.
 - PostgreSQL 통합 테스트 전체 6 files, 33 tests 통과. 고객 토큰 소유권, 원자적 변경과 취소 포함.
 
+Step 08 개발 기반 실행 증거(2026-11-08 Asia/Taipei):
+
+- NotificationProvider 계약, 개발 Fake, 언어·버전 템플릿, 발송 이력과 재시도 상태 구현.
+- outbox `SKIP LOCKED` claim·lease, 이벤트/채널 유일키 멱등 소비, 수신번호 누락 처리 구현.
+- worker heartbeat·HOLD 만료와 같은 루프에 알림 outbox 소비·재시도 연결.
+- PostgreSQL 통합 테스트 전체 7 files, 34 tests 통과. 동일 이벤트 fake SMS 1회 발송 검증.
+- 실제 SMS 업체 Adapter·콜백·실발송은 업체와 계정이 확정되지 않아 BLOCKED.
+
 ```text
 일시 / commit 또는 작업 revision:
 단계 / 실행 환경:
@@ -145,7 +153,7 @@ Step 07 실행 증거(2026-11-08 Asia/Taipei):
 
 ## 다음 작업
 
-Step 00~07이 완료됐다. 다음 작업은 Step 08의 worker·알림·SMS 연동이다. 운영 공개는 활성 기능의 외부 검증과 운영자 확정이 완료된 후 수행한다.
+다음 독립 구현은 Step 09 결제 기반이다. Step 08 실연동을 해제하려면 SMS 업체·계정·발신번호·테스트 수신처 확정이 필요하다.
 
 ## v2 개정 이력
 

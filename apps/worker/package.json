@@ -12,6 +12,7 @@
   "dependencies": {
     "@reservation/db": "workspace:*",
     "@reservation/reservation-engine": "workspace:*",
+    "@reservation/notifications": "workspace:*",
     "@reservation/shared": "workspace:*",
     "dotenv": "17.3.1",
     "pg": "8.23.1"

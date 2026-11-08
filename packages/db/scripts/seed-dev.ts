@@ -134,6 +134,17 @@ async function main(): Promise<void> {
       `UPDATE policy_versions SET status='PUBLISHED',published_at=CURRENT_TIMESTAMP
        WHERE id=$1 AND status='DRAFT'`, [ids.policy],
     );
+    for (const [eventType, body] of [
+      ["HOLD_SUBMITTED", "예약 {{reservationNumber}} 상태: {{status}}"],
+      ["CUSTOMER_CHANGED", "예약 {{reservationNumber}} 변경 완료"],
+      ["CUSTOMER_CANCELLED", "예약 {{reservationNumber}} 취소 완료"],
+    ] as const) {
+      await client.query(
+        `INSERT INTO notification_templates(restaurant_id,event_type,locale,version,body)
+         VALUES($1,$2,'zh-TW',1,$3) ON CONFLICT(restaurant_id,event_type,locale,version) DO NOTHING`,
+        [ids.restaurant,eventType,body],
+      );
+    }
     await client.query("COMMIT");
     console.log(JSON.stringify({ seeded: true, restaurantId: ids.restaurant, tableCount: ids.tables.length }));
   } catch (error) {
